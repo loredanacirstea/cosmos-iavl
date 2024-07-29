@@ -654,6 +654,18 @@ func (tree *MutableTree) Rollback() {
 	}
 }
 
+func (tree *MutableTree) Reset() {
+	tree.ImmutableTree = &ImmutableTree{
+		ndb:                    tree.ndb,
+		version:                0,
+		skipFastStorageUpgrade: tree.skipFastStorageUpgrade,
+	}
+	if !tree.skipFastStorageUpgrade {
+		tree.unsavedFastNodeAdditions = &sync.Map{}
+		tree.unsavedFastNodeRemovals = &sync.Map{}
+	}
+}
+
 // GetVersioned gets the value at the specified key and version. The returned value must not be
 // modified, since it may point to data stored within IAVL.
 func (tree *MutableTree) GetVersioned(key []byte, version int64) ([]byte, error) {
