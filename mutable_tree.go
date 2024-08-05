@@ -2,6 +2,7 @@ package iavl
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -43,6 +44,9 @@ type MutableTree struct {
 	skipFastStorageUpgrade   bool // If true, the tree will work like no fast storage and always not upgrade fast storage
 
 	mtx sync.Mutex
+
+	cacheSize int
+	opts      Options
 }
 
 // NewMutableTree returns a new tree with the specified optional options.
@@ -63,6 +67,8 @@ func NewMutableTree(db dbm.DB, cacheSize int, skipFastStorageUpgrade bool, lg lo
 		unsavedFastNodeRemovals:  &sync.Map{},
 		ndb:                      ndb,
 		skipFastStorageUpgrade:   skipFastStorageUpgrade,
+		cacheSize:                cacheSize,
+		opts:                     opts,
 	}
 }
 
@@ -654,16 +660,29 @@ func (tree *MutableTree) Rollback() {
 	}
 }
 
-func (tree *MutableTree) Reset() {
+func (tree *MutableTree) Reset() error {
+	err := tree.ndb.DeleteVersionsFrom(1)
+	if err != nil {
+		return err
+	}
+
+	ndb := newNodeDB(tree.ndb.db, tree.cacheSize, tree.opts, tree.logger)
 	tree.ImmutableTree = &ImmutableTree{
-		ndb:                    tree.ndb,
+		ndb:                    ndb,
 		version:                0,
 		skipFastStorageUpgrade: tree.skipFastStorageUpgrade,
 	}
+	tree.lastSaved = tree.ImmutableTree.clone()
+	tree.root = nil
 	if !tree.skipFastStorageUpgrade {
 		tree.unsavedFastNodeAdditions = &sync.Map{}
 		tree.unsavedFastNodeRemovals = &sync.Map{}
 	}
+	err = tree.ndb.Commit()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetVersioned gets the value at the specified key and version. The returned value must not be
