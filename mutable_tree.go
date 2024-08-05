@@ -2,7 +2,6 @@ package iavl
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
